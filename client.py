@@ -43,11 +43,17 @@ def handle_send(sock):
     while True:
         msg = input()
         if msg.lower() in ("bye", "exit", "quit"):
-            sock.sendall(build_packet(CMD_BYE, username))
+            try:
+                sock.sendall(build_packet(CMD_BYE, username))
+            except OSError:
+                pass
             sock.close()
-            break
+            return  # stop immediately after closing
         else:
-            sock.sendall(build_packet(CMD_DATA, f"{username}: {msg}"))
+            try:
+                sock.sendall(build_packet(CMD_DATA, f"{username}: {msg}"))
+            except OSError:
+                break
 
 if __name__ == "__main__":
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

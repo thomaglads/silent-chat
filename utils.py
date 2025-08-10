@@ -1,9 +1,21 @@
+# utils.py
+CMD_GREET = 0x01
+CMD_DATA = 0x02
+CMD_BYE = 0x03
+
+def build_packet(command: int, data: str) -> bytes:
+    encoded_data = data.encode('utf-8')
+    length = len(encoded_data)
+    packet_wo_checksum = bytes([0xAA, command, length]) + encoded_data
+    checksum = sum(packet_wo_checksum) & 0xFF
+    return packet_wo_checksum + bytes([checksum])
+
 from datetime import datetime
 
 def parse_packet(packet: bytes) -> bool:
     """
     Parse a packet and print info.
-    Returns True if CMD_BYE was received (to trigger close).
+    Returns True if CMD_BYE was received (to signal connection close).
     """
     if len(packet) < 4:
         print("[WARN] Packet too short")
@@ -39,4 +51,3 @@ def parse_packet(packet: bytes) -> bool:
         print(f"[{timestamp}] [UNKNOWN CMD {cmd}] {text}")
 
     return False
-
