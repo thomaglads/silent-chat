@@ -4,6 +4,7 @@ A simple 1-to-1 local chat application built in Python using a **custom binary p
 
 A mini internet chat system built from scratch using Python. This project demonstrates how machines communicate at a low level using custom binary protocols over raw TCP sockets. It features a simple packet structure, concurrency with threading for simultaneous send/receive, and clean connection handling.
 You’ll gain hands-on experience with raw byte communication, protocol design, socket programming, and basic multithreading  foundational concepts in computer networking and software engineering.
+
 ---
 
 ## Features
