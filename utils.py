@@ -1,42 +1,42 @@
-# utils.py
-"""
-Utility functions for Silent Chat protocol.
-"""
+from datetime import datetime
 
-START_BYTE = 0xAA
-END_BYTE = 0xFF
-
-# Command codes
-CMD_GREET = 0x01
-CMD_DATA = 0x02
-CMD_BYE = 0x03
-
-def build_packet(command: int, data: str) -> bytes:
+def parse_packet(packet: bytes) -> bool:
     """
-    Build a binary packet from command and data string.
+    Parse a packet and print info.
+    Returns True if CMD_BYE was received (to trigger close).
     """
-    encoded_data = data.encode('utf-8')
-    length = len(encoded_data)
-    if length > 255:
-        raise ValueError("Data too long (max 255 bytes)")
-    
-    return bytes([START_BYTE, command, length]) + encoded_data + bytes([END_BYTE])
+    if len(packet) < 4:
+        print("[WARN] Packet too short")
+        return False
 
-def parse_packet(packet: bytes) -> tuple[int, str]:
-    """
-    Parse a binary packet into (command, data) tuple.
-    Raises ValueError if packet is invalid.
-    """
-    if len(packet) < 5:  # at least start, command, length, 1 data byte, end
-        raise ValueError("Packet too short")
-    if packet[0] != START_BYTE or packet[-1] != END_BYTE:
-        raise ValueError("Invalid start/end byte")
+    start, cmd, length = packet[0], packet[1], packet[2]
+    payload = packet[3:3+length]
+    checksum = packet[3+length]
 
-    command = packet[1]
-    length = packet[2]
-    data_bytes = packet[3:3+length]
-    
-    if len(data_bytes) != length:
-        raise ValueError("Data length mismatch")
+    if start != 0xAA:
+        print("[WARN] Invalid start byte")
+        return False
 
-    return command, data_bytes.decode('utf-8')
+    if (sum(packet[:3+length]) & 0xFF) != checksum:
+        print("[WARN] Invalid checksum")
+        return False
+
+    text = payload.decode('utf-8', errors='replace')
+    timestamp = datetime.now().strftime("%H:%M")
+
+    if cmd == CMD_GREET:
+        print(f"[{timestamp}] * {text} joined the chat *")
+    elif cmd == CMD_DATA:
+        if ": " in text:
+            username, msg = text.split(": ", 1)
+            print(f"[{timestamp}] {username}: {msg}")
+        else:
+            print(f"[{timestamp}] {text}")
+    elif cmd == CMD_BYE:
+        print(f"[{timestamp}] * {text} left the chat *")
+        return True
+    else:
+        print(f"[{timestamp}] [UNKNOWN CMD {cmd}] {text}")
+
+    return False
+

@@ -1,9 +1,8 @@
 import socket
 import threading
-from utils import parse_packet, build_packet, CMD_DATA, CMD_BYE, CMD_GREET
+from utils import build_packet, parse_packet, CMD_GREET, CMD_DATA, CMD_BYE
 
-HOST = '127.0.0.1'
-PORT = 65432
+username = input("Enter your username: ")
 
 def handle_receive(sock):
     buffer = bytearray()
@@ -15,7 +14,6 @@ def handle_receive(sock):
             if len(buffer) < 4:
                 break
             if buffer[0] != 0xAA:
-                print("[WARN] Invalid start byte, discarding...")
                 buffer.pop(0)
                 continue
             length = buffer[2]
@@ -28,31 +26,36 @@ def handle_receive(sock):
         return packets
 
     while True:
-        chunk = sock.recv(1024)
-        if not chunk:
-            print("[Client] Connection closed by server.")
+        try:
+            chunk = sock.recv(1024)
+            if not chunk:
+                print("[INFO] Connection closed by peer.")
+                break
+            buffer.extend(chunk)
+            for pkt in process_buffer():
+                if parse_packet(pkt):
+                    sock.close()
+                    return
+        except (ConnectionResetError, ConnectionAbortedError, OSError):
             break
-        buffer.extend(chunk)
-        for pkt in process_buffer():
-            parse_packet(pkt)
 
 def handle_send(sock):
-    # Send greeting first
-    sock.sendall(build_packet(CMD_GREET, "Hello from client!"))
     while True:
-        msg = input("Client: ")
+        msg = input()
         if msg.lower() in ("bye", "exit", "quit"):
-            sock.sendall(build_packet(CMD_BYE, "Client says bye!"))
+            sock.sendall(build_packet(CMD_BYE, username))
+            sock.close()
             break
         else:
-            sock.sendall(build_packet(CMD_DATA, msg))
+            sock.sendall(build_packet(CMD_DATA, f"{username}: {msg}"))
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
+if __name__ == "__main__":
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("127.0.0.1", 65432))
     print("[Client] Connected to server.")
 
-    recv_thread = threading.Thread(target=handle_receive, args=(s,), daemon=True)
-    send_thread = threading.Thread(target=handle_send, args=(s,), daemon=False)
+    sock.sendall(build_packet(CMD_GREET, username))
 
-    recv_thread.start()
-    send_thread.start()
+    threading.Thread(target=handle_receive, args=(sock,), daemon=True).start()
+    handle_send(sock)
+

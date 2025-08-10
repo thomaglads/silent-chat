@@ -1,9 +1,8 @@
 import socket
 import threading
-from utils import parse_packet, build_packet, CMD_DATA, CMD_BYE
+from utils import build_packet, parse_packet, CMD_GREET, CMD_DATA, CMD_BYE
 
-HOST = '127.0.0.1'
-PORT = 65432
+username = input("Enter your username: ")
 
 def handle_receive(conn):
     buffer = bytearray()
@@ -15,7 +14,6 @@ def handle_receive(conn):
             if len(buffer) < 4:
                 break
             if buffer[0] != 0xAA:
-                print("[WARN] Invalid start byte, discarding...")
                 buffer.pop(0)
                 continue
             length = buffer[2]
@@ -28,33 +26,39 @@ def handle_receive(conn):
         return packets
 
     while True:
-        chunk = conn.recv(1024)
-        if not chunk:
-            print("[Server] Connection closed by client.")
+        try:
+            chunk = conn.recv(1024)
+            if not chunk:
+                print("[INFO] Connection closed by peer.")
+                break
+            buffer.extend(chunk)
+            for pkt in process_buffer():
+                if parse_packet(pkt):
+                    conn.close()
+                    return
+        except (ConnectionResetError, ConnectionAbortedError, OSError):
             break
-        buffer.extend(chunk)
-        for pkt in process_buffer():
-            parse_packet(pkt)
 
 def handle_send(conn):
     while True:
-        msg = input("Server: ")
+        msg = input()
         if msg.lower() in ("bye", "exit", "quit"):
-            conn.sendall(build_packet(CMD_BYE, "Server says bye!"))
+            conn.sendall(build_packet(CMD_BYE, username))
+            conn.close()
             break
         else:
-            conn.sendall(build_packet(CMD_DATA, msg))
+            conn.sendall(build_packet(CMD_DATA, f"{username}: {msg}"))
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((HOST, PORT))
-    s.listen()
-    print(f"[Server] Listening on {HOST}:{PORT}...")
+if __name__ == "__main__":
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 65432))
+    server.listen(1)
+    print("[Server] Listening on 127.0.0.1:65432...")
 
-    conn, addr = s.accept()
+    conn, addr = server.accept()
     print(f"[Server] Connected by {addr}")
 
-    recv_thread = threading.Thread(target=handle_receive, args=(conn,), daemon=True)
-    send_thread = threading.Thread(target=handle_send, args=(conn,), daemon=False)
+    conn.sendall(build_packet(CMD_GREET, username))
 
-    recv_thread.start()
-    send_thread.start()
+    threading.Thread(target=handle_receive, args=(conn,), daemon=True).start()
+    handle_send(conn)
